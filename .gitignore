@@ -1,0 +1,5 @@
+build/
+.ccls-cache/
+*.ccls
+*.swp
+*.out
