@@ -47,3 +47,15 @@ Retrieve a component from an entity. This is done `n` times by iterating through
 | 4096             | 65852 ns | 16.02 ns   |
 
 Note that the time per `unpack` operation decreases as we iterate through more entities before leveling off at ~16 ns. I suspect this is at least partly to do with the fact that components being accessed are being cached.
+
+### ```each<Components...>(fn)```
+
+Call `fn` with each component unpacked from the matched entity. This function calls `view<Components...>()` and unpacks each component for each entity.
+
+| `n` (# Entities) | `each<A, B>([](A &a, B &b) {})` |
+| ---------------- | ------------------------------- |
+| 512              | 0.017 ms                        |
+| 1024             | 0.035 ms                        |
+| 2048             | 0.070 ms                        |
+| 4096             | 0.141 ms                        |
+

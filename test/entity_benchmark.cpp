@@ -1,6 +1,6 @@
 #include "benchmark/benchmark.h"
 
-#define TWO_ENTITY_MAX 2<<16
+#define TWO_ENTITY_MAX 32<<10
 #include "../entity.h"
 
 // Some dummy components
@@ -19,13 +19,6 @@ static void make_entities(two::World *world, int n) {
         auto entity = world->make_entity();
         (world->pack(entity, Components{}), ...);
     }
-}
-
-static void destroy_entities(two::World *world) {
-    for (auto entity : world->view()) {
-        world->destroy_entity(entity);
-    }
-    world->collect_unused_entities();
 }
 
 template <typename... Components>
@@ -48,6 +41,40 @@ BENCHMARK_TEMPLATE(BM_ViewCached, A, B)
 
 BENCHMARK_TEMPLATE(BM_ViewCached, A, B, C, D)
     ->RangeMultiplier(2)->Range(512, 16<<10);
+
+static void BM_Lambda(benchmark::State &state) {
+    two::World world;
+    make_entities<A, B>(&world, state.range(0));
+    world.view<A, B>();
+
+    for (auto _ : state) {
+        world.each<A, B>([](A &a, B &b) {
+            benchmark::DoNotOptimize(a);
+            benchmark::DoNotOptimize(b);
+        });
+    }
+}
+BENCHMARK(BM_Lambda)
+    ->RangeMultiplier(2)->Range(512, 4<<10)->Unit(benchmark::kMillisecond);
+
+static void BM_LambdaWithCapture(benchmark::State &state) {
+    two::World world;
+    make_entities<A, B>(&world, state.range(0));
+    world.view<A, B>();
+
+    char data[16];
+    benchmark::DoNotOptimize(data);
+
+    for (auto _ : state) {
+        world.each<A, B>([&data](A &a, B &b) {
+            benchmark::DoNotOptimize(a);
+            benchmark::DoNotOptimize(b);
+            benchmark::DoNotOptimize(data);
+        });
+    }
+}
+BENCHMARK(BM_LambdaWithCapture)
+    ->RangeMultiplier(2)->Range(512, 4<<10)->Unit(benchmark::kMillisecond);
 
 template <typename... Components>
 static void BM_ViewPreCache(benchmark::State &state) {
