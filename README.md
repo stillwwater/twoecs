@@ -83,6 +83,8 @@ int main() {
 
 ## Performance
 
+[benchmarks](./docs/benchmarks.md)
+
 Entity component systems generally have very good performance, but given that the entity system is unlikely to be the bottleneck in an engine, this library prioritizes flexibility in the API over being the fastest it could be. That being said, the most common operations are optimized to have as little overhead as possible and are suitable to be called many times per frame. For example, retrieving a list of entities with given components (`view<Components...>()`) is under 200 instructions on amd64. The documentation goes over the performance implications of the more performance critical functions.
 
 Two ECS relies heavily on hash tables, and a good chunk of CPU time in this implementation is used by `std::unordered_map` and `std::unordered_set`, so replacing these with a hash table with open addressing is likely to improve performance quite a bit due to better cache locality.
