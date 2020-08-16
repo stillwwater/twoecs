@@ -336,6 +336,9 @@ public:
     template <typename... Components>
     const std::vector<Entity> &view(bool include_inactive = false);
 
+    template <typename... Components, typename Func>
+    void each(Func &&fn, bool include_inactive = false);
+
     template <typename... Components>
     Optional<two::Entity> view_one(bool include_inactive = false);
 
@@ -584,6 +587,24 @@ for (auto entity : view<A, B, C>()) {
 The first call to this function will build a cache with the entities that contain the requested components, subsequent calls will return the cached data as long as the data is still valid. If a cache is no longer valid, this function will rebuild the cache by applying all necessary diffs to make the cache valid.
 
 The cost of rebuilding the cache depends on how many diff operations are needed. Any operation that changes whether an entity should be in this cache (does the entity have all requested components?) counts as a single Add or Remove diff. Functions like `remove_component`, `make_entity`, `pack`, `destroy_entity` may cause a cache to be invalidated. Functions that may invalidate the cache are documented.
+
+-----
+
+### Function `two::World::each`
+
+```cpp
+template <typename... Components, typename Func>
+void each(Func &&fn, bool include_inactive = false);
+```
+
+ Calls `fn` with each unpacked component for every entity with all requested components.
+```cpp
+each<A, B, C>([](A &a, B &b, C &c) {
+    // ...
+});
+```
+
+This function calls `view<Components...>()` internally so the same notes about `view` apply here as well.
 
 -----
 

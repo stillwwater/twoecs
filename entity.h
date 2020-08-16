@@ -411,7 +411,7 @@ public:
     // This function calls `view<Components...>()` internally so the same
     // notes about `view` apply here as well.
     template <typename... Components, typename Func>
-    inline void each(const Func &fn, bool include_inactive = false);
+    inline void each(Func &&fn, bool include_inactive = false);
 
     // Returns the **first** entity that contains all components requested.
     // Views always keep entities in the order that the entity was
@@ -787,7 +787,12 @@ const std::vector<Entity> &World::view(bool include_inactive) {
 }
 
 template <typename... Components, typename Func>
-inline void World::each(const Func &fn, bool include_inactive) {
+inline void World::each(Func &&fn, bool include_inactive) {
+    static_assert(
+        std::is_convertible<Func &&,
+            std::function<void (Components &...)>>::value,
+        "Incompatible function signature");
+
     for (const auto entity : view<Components...>(include_inactive)) {
         fn(unpack<Components>(entity)...);
     }
