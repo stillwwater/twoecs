@@ -401,6 +401,18 @@ public:
     template <typename... Components>
     const std::vector<Entity> &view(bool include_inactive = false);
 
+    // Calls `fn` with each unpacked component for every entity with all
+    // requested components.
+    //
+    //     each<A, B, C>([](A &a, B &b, C &c) {
+    //         // ...
+    //     });
+    //
+    // This function calls `view<Components...>()` internally so the same
+    // notes about `view` apply here as well.
+    template <typename... Components, typename Func>
+    inline void each(const Func &fn, bool include_inactive = false);
+
     // Returns the **first** entity that contains all components requested.
     // Views always keep entities in the order that the entity was
     // added to the view, so `view_one()` will reliabily return the same
@@ -772,6 +784,13 @@ const std::vector<Entity> &World::view(bool include_inactive) {
         EntityCache{std::move(cache), {}, std::move(lookup)}));
 
     return view_cache[mask].entities;
+}
+
+template <typename... Components, typename Func>
+inline void World::each(const Func &fn, bool include_inactive) {
+    for (const auto entity : view<Components...>(include_inactive)) {
+        fn(unpack<Components>(entity)...);
+    }
 }
 
 template <typename... Components>

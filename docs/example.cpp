@@ -30,8 +30,15 @@ public:
             tf.position.z += vel.value.z * dt;
         }
     }
-    // May also override System::load(World *),
-    // System::unload(World *) and System::draw(World *)
+
+    void draw(two::World *world) override {
+        world->each<Transform>([](Transform &tf) {
+            printf("(%f, %f, %f)\n",
+                   tf.position.x, tf.position.y, tf.position.z);
+        });
+    }
+    // May also override System::load(World *)
+    // and System::unload(World *)
 };
 
 class MainWorld : public two::World {
