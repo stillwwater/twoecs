@@ -17,6 +17,9 @@ struct Velocity {
     Vector3 value;
 };
 
+// An event
+struct QuitEvent {};
+
 class MoveSystem : public two::System {
 public:
     void update(two::World *world, float dt) override {
@@ -25,9 +28,17 @@ public:
         for (auto entity : world->view<Transform, Velocity>()) {
             auto &tf = world->unpack<Transform>(entity);
             auto &vel = world->unpack<Velocity>(entity);
+
             tf.position.x += vel.value.x * dt;
             tf.position.y += vel.value.y * dt;
             tf.position.z += vel.value.z * dt;
+
+            vel.value.x -= 0.01f * dt;
+            vel.value.y -= 0.02f * dt;
+            vel.value.z -= 0.04f * dt;
+
+            if (vel.value.x <= 0)
+                world->emit(QuitEvent{});
         }
     }
 
@@ -46,6 +57,7 @@ public:
     void load() override {
         // This will call System::load(world)
         make_system<MoveSystem>();
+        bind<QuitEvent>(&MainWorld::quit, this);
 
         auto entity = make_entity();
         pack(entity, Transform{Vector3{0.0f, 0.0f, 0.0f}});
@@ -59,13 +71,27 @@ public:
             system->update(this, dt);
         }
     }
+
+    bool quit(const QuitEvent &) {
+        printf("Done.\n");
+        return false;
+    }
     // May also override World::unload()
 };
 
 int main() {
+    bool running = true;
     MainWorld world;
+
+    world.bind<QuitEvent>([&running](const QuitEvent &) {
+        running = false;
+        // Returning false means the event will continue to propagate
+        // to all functions bound to this event.
+        return false;
+    });
     world.load();
-    for (int frame = 0; frame < 1000000; ++frame) {
+
+    while (running) {
         // Handle events
         // ...
         // Update world

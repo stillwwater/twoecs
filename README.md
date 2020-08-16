@@ -1,6 +1,6 @@
 # Two ECS
 
-A single header implementation of an Entity Component System ([ECS](https://en.wikipedia.org/wiki/Entity_component_system)). Since there isn’t a strict definition of what an ECS is, this library follows the definition presented in [this GDC 2017 talk](https://www.youtube.com/watch?v=W3aieHjyNvw&t=638s) on the implementation used in Overwatch. By this definition an Entity is just an id (aliased to `uint16_t` by default), a Component has no functionality, a System holds no data, and a World is a collection of Entities, Systems and Components.
+A single header implementation of an Entity Component System ([ECS](https://en.wikipedia.org/wiki/Entity_component_system)). Since there isn’t a strict definition of what an ECS is, this library follows the definition presented in [this GDC 2017 talk](https://www.youtube.com/watch?v=W3aieHjyNvw) on the implementation used in Overwatch. By this definition an Entity is just an id (aliased to `uint16_t` by default), a Component has no functionality, a System holds no data, and a World is a collection of Entities, Systems and Components.
 
 This library is probably best used as a reference for learning, since if you’re implementing a game engine you’ll likely want to implement your own ECS anyways. The library is written in C++11 so it should compile on consoles, it also does not rely on RTTI and can be compiled with `-fno-rtti` and `-fno-exceptions` (or msvc equivalents).
 
@@ -24,6 +24,9 @@ struct Velocity {
     Vector3 value;
 };
 
+// An event
+struct QuitEvent {};
+
 class MoveSystem : public two::System {
 public:
     void update(two::World *world, float dt) override {
@@ -35,6 +38,12 @@ public:
             tf.position.x += vel.value.x * dt;
             tf.position.y += vel.value.y * dt;
             tf.position.z += vel.value.z * dt;
+
+            vel.value.x -= 0.01f * dt;
+            vel.value.y -= 0.02f * dt;
+            vel.value.z -= 0.04f * dt;
+            if (vel.value.x <= 0)
+                world->emit(QuitEvent{});
         }
     }
 
@@ -71,9 +80,16 @@ public:
 };
 
 int main() {
+    bool running = true;
     MainWorld world;
+
+    world.bind<QuitEvent>([&running](const QuitEvent &) {
+        running = false;
+        return true;
+    });
     world.load();
-    for (int frame = 0; frame < 1000000; ++frame) {
+
+    while (running) {
         // Handle events
         // ...
         // Update world
@@ -82,6 +98,7 @@ int main() {
         for (auto *system : world.systems()) {
             system->draw(&world);
         }
+        world.collect_unused_entities();
     }
     world.destroy_systems();
     world.unload();

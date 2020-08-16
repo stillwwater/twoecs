@@ -256,6 +256,22 @@ private:
     size_t packed_count = 0;
 };
 
+// An event channel handles events for a single event type.
+template <typename Event>
+class EventChannel {
+public:
+    using EventHandler = std::function<bool (const Event &)>;
+
+    // Adds a function as an event handler
+    void bind(EventHandler &&fn);
+
+    // Emits an event to all event handlers
+    void emit(const Event &event) const;
+
+private:
+    std::vector<EventHandler> handlers;
+};
+
 // A world holds a collection of systems, components and entities.
 class World {
 public:
@@ -493,6 +509,27 @@ public:
     // Systems returned will not be null.
     inline const std::vector<System *> &systems() { return active_systems; }
 
+    // Adds a function to receive events of type T
+    template <typename Event>
+    void bind(typename EventChannel<Event>::EventHandler &&fn);
+
+    // Same as `bind(fn)` but allows a member function to be used
+    // as an event handler.
+    //
+    //     bind<KeyDownEvent>(&World::keydown, this);
+    template <typename Event, typename Func, class T>
+    void bind(Func &&fn, T this_ptr);
+
+    // Emits an event to all event handlers. If a handler function in the
+    // chain returns true then the event is considered handled and will
+    // not propagate to other listeners.
+    template <typename Event>
+    void emit(const Event &event) const;
+
+    // Removes all event handlers, you'll unlikely need to call this since
+    // events are cleared when the world is destroyed.
+    inline void clear_event_channels() { channels.clear(); };
+
     // Components will be registered on their own if a new type of component is
     // added to an entity. There is no need to call this function unless you
     // are doing something specific that requires it.
@@ -563,67 +600,11 @@ private:
 
     std::unordered_map<type_id_t, ComponentType> component_types;
 
+    // Event channels.
+    std::unordered_map<type_id_t, unique_void_ptr_t> channels;
+
     void apply_diffs_to_cache(EntityCache *cache);
     void invalidate_cache(EntityCache *cache, EntityCache::Diff &&diff);
-};
-
-// An event channel handles events for a single event type.
-// This is an implementation detail of `EventDispatcher`.
-template <typename Event>
-class EventChannel {
-public:
-    using EventHandler = std::function<bool (const Event &)>;
-
-    // Adds a function as an event handler
-    void bind(EventHandler fn);
-
-    // Emits an event to all event handlers
-    void emit(const Event &event) const;
-
-private:
-    std::vector<EventHandler> handlers;
-};
-
-// The event manager handles many event types.
-//
-//     // Example usage in a World class
-//     engine::events.bind<KeyDownEvent>(&World::keydown, this);
-//
-// You can have a single event dispatcher in your engine's global state or have
-// one `EventDispatcher` per World.  If you are using a single global event
-// dispatcher you should also call `clear()` when you unload a world.
-class EventDispatcher {
-public:
-    EventDispatcher() = default;
-
-    EventDispatcher(const EventDispatcher &) = delete;
-    EventDispatcher &operator=(const EventDispatcher &) = delete;
-
-    EventDispatcher(EventDispatcher &&) = default;
-    EventDispatcher &operator=(EventDispatcher &&) = default;
-
-    ~EventDispatcher() = default;
-
-    // Adds a function to receive events of type T
-    template <typename Event>
-    void bind(typename EventChannel<Event>::EventHandler fn);
-
-    // Same as `bind(callback)` but allows a member function to be used
-    // as an event handler.
-    template <typename Event, typename Func, class T>
-    void bind(Func fn, T this_ptr);
-
-    // Emits an event to all event handlers. If a handler function in the
-    // chain returns true then the event is considered handled and will
-    // not propagate to other listeners.
-    template <typename Event>
-    void emit(const Event &event) const;
-
-    // Removes all event handlers
-    void clear();
-
-private:
-    std::unordered_map<type_id_t, unique_void_ptr_t> channels;
 };
 
 inline const EntityMask &World::get_mask(Entity entity) const {
@@ -1084,6 +1065,31 @@ inline void World::invalidate_cache(EntityCache *c, EntityCache::Diff &&diff) {
     c->diffs.emplace_back(std::move(diff));
 }
 
+template <typename Event>
+void World::bind(typename EventChannel<Event>::EventHandler &&fn) {
+    constexpr auto type = type_id<Event>();
+    if (channels.find(type) == channels.end()) {
+        auto c = unique_void_ptr<EventChannel<Event>>(new EventChannel<Event>);
+        channels.emplace(std::make_pair(type, std::move(c)));
+    }
+    static_cast<EventChannel<Event> *>(channels.at(type).get())
+        ->bind(std::move(fn));
+}
+
+template <typename Event, typename Func, class T>
+void World::bind(Func &&fn, T this_ptr) {
+    bind<Event>(std::bind(fn, this_ptr, std::placeholders::_1));
+}
+
+template <typename Event>
+void World::emit(const Event &event) const {
+    auto chan_it = channels.find(type_id<Event>());
+    if (chan_it == channels.end()) {
+        return;
+    }
+    static_cast<EventChannel<Event> *>(chan_it->second.get())->emit(event);
+}
+
 inline void World::load() {}
 inline void World::update(float) {}
 inline void World::unload() {}
@@ -1165,35 +1171,7 @@ inline void System::draw(World *) {}
 inline void System::unload(World *) {}
 
 template <typename Event>
-void EventDispatcher::bind(typename EventChannel<Event>::EventHandler fn) {
-    constexpr auto type = type_id<Event>();
-    if (channels.find(type) == channels.end()) {
-        auto c = unique_void_ptr<EventChannel<Event>>(new EventChannel<Event>);
-        channels.emplace(std::make_pair(type, std::move(c)));
-    }
-    static_cast<EventChannel<Event> *>(channels.at(type).get())->bind(fn);
-}
-
-template <typename Event, typename Func, class T>
-void EventDispatcher::bind(Func fn, T this_ptr) {
-    bind<Event>(std::bind(fn, this_ptr, std::placeholders::_1));
-}
-
-template <typename Event>
-void EventDispatcher::emit(const Event &event) const {
-    auto chan_it = channels.find(type_id<Event>());
-    if (chan_it == channels.end()) {
-        return;
-    }
-    static_cast<EventChannel<Event> *>(chan_it->second.get())->emit(event);
-}
-
-inline void EventDispatcher::clear() {
-    channels.clear();
-}
-
-template <typename Event>
-void EventChannel<Event>::bind(EventHandler fn) {
+void EventChannel<Event>::bind(EventHandler &&fn) {
     handlers.push_back(std::move(fn));
 }
 

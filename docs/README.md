@@ -368,6 +368,16 @@ public:
 
     const std::vector<System *> &systems();
 
+    template <typename Event>
+    void bind(typename EventChannel<Event>::EventHandler &&fn);
+
+    template <typename Event, typename Func, class T>
+    void bind(Func &&fn, T this_ptr);
+
+    void emit(const Event &event) const;
+
+    inline void clear_event_channels();
+    
     template <typename Component>
     two::ComponentType find_or_register_component();
 
@@ -751,6 +761,53 @@ Systems returned will not be null.
 
 -----
 
+### Function `two::World::bind`
+
+``` cpp
+template <typename Event>
+void bind(typename EventChannel<Event>::EventHandler fn);
+```
+
+Adds a function to receive events of type T
+
+-----
+
+### Function `two::World::bind`
+
+``` cpp
+template <typename Event, typename Func, class T>
+void bind(Func fn, T this_ptr);
+```
+
+Same as `bind(fn)` but allows a member function to be used as an event handler.
+
+```cpp
+bind<KeyDownEvent>(&World::keydown, this);
+```
+
+-----
+
+### Function `two::World::emit`
+
+``` cpp
+template <typename Event>
+void emit(const Event &event) const;
+```
+
+Emits an event to all event handlers. If a handler function in the chain returns true then the event is considered handled and will not propagate to other listeners.
+
+-----
+
+### Function `two::World::clear_event_channels`
+
+``` cpp
+void clear_event_channels();
+```
+
+Removes all event handlers
+
+-----
+
 ### Function `two::World::find_or_register_component`
 
 ``` cpp
@@ -786,7 +843,7 @@ class EventChannel {
 public:
     using EventHandler = std::function<bool (const Event &)>;
 
-    void bind(two::EventChannel::EventHandler fn);
+    void bind(two::EventChannel::EventHandler &&fn);
     void emit(const Event &event) const;
 };
 ```
@@ -798,7 +855,7 @@ This is an implementation detail of `EventDispatcher`.
 ### Function `two::EventChannel::bind`
 
 ``` cpp
-void bind(two::EventChannel::EventHandler fn);
+void bind(two::EventChannel::EventHandler &&fn);
 ```
 
 Adds a function as an event handler
@@ -812,90 +869,6 @@ void emit(const Event &event) const;
 ```
 
 Emits an event to all event handlers
-
------
-
------
-
-### Class `two::EventDispatcher`
-
-``` cpp
-class EventDispatcher {
-public:
-    EventDispatcher() = default;
-
-    EventDispatcher(const two::EventDispatcher &) = delete;
-
-    two::EventDispatcher &operator=(const two::EventDispatcher &) = delete;
-
-    EventDispatcher(two::EventDispatcher &&) = default;
-
-    two::EventDispatcher &operator=(two::EventDispatcher &&) = default;
-
-    ~EventDispatcher() = default;
-
-    template <typename Event>
-    void bind(typename EventChannel<Event>::EventHandler fn);
-
-    template <typename Event, typename Func, class T>
-    void bind(Func fn, T this_ptr);
-
-    template <typename Event>
-    void emit(const Event &event) const;
-
-    void clear();
-};
-```
-
-The event manager handles many event types.
-
-```cpp
-// Example usage in a World class
-engine::events.bind<KeyDownEvent>(&World::keydown, this);
-```
-
-You can have a single event dispatcher in your engine’s global state or have one `EventDispatcher` per World.  If you are using a single global event dispatcher you should also call `clear()` when you unload a world.
-
-### Function `two::EventDispatcher::bind`
-
-``` cpp
-template <typename Event>
-void bind(typename EventChannel<Event>::EventHandler fn);
-```
-
-Adds a function to receive events of type T
-
------
-
-### Function `two::EventDispatcher::bind`
-
-``` cpp
-template <typename Event, typename Func, class T>
-void bind(Func fn, T this_ptr);
-```
-
-Same as `bind(callback)` but allows a member function to be used as an event handler.
-
------
-
-### Function `two::EventDispatcher::emit`
-
-``` cpp
-template <typename Event>
-void emit(const Event &event) const;
-```
-
-Emits an event to all event handlers. If a handler function in the chain returns true then the event is considered handled and will not propagate to other listeners.
-
------
-
-### Function `two::EventDispatcher::clear`
-
-``` cpp
-void clear();
-```
-
-Removes all event handlers
 
 -----
 
