@@ -167,6 +167,7 @@ public:
 
     T value_or(T &&u) { has_value ? std::move(val) : u; };
     T value_or(const T &u) const { has_value ? val : u; };
+
 private:
     T val;
 };
@@ -306,7 +307,7 @@ public:
     Entity make_entity();
 
     // Creates a new entity and copies components from another.
-    Entity make_entity(Entity prefab);
+    Entity make_entity(Entity archetype);
 
     // Creates a new inactive entity in the world. The entity will need
     // to have active set before it can be used by systems.
@@ -339,6 +340,14 @@ public:
     // does not invalidate the cache and is cheap operation.
     template <typename Component>
     Component &pack(Entity entity, const Component &component);
+
+    // Shortcut to pack multiple components to an entity, equivalent to
+    // calling `pack(entity, component)` for each component.
+    //
+    // Unlike the original `pack` function, this function does not return a
+    // reference to the component that was just packed.
+    template <typename Component, typename... Components>
+    void pack(Entity entity, const Component &h, const Components &...t);
 
     // Returns a component of the given type associated with an entity.
     // This function will only check if the component does not exist for an
@@ -652,6 +661,12 @@ Component &World::pack(Entity entity, const Component &component) {
     return new_component;
 }
 
+template <typename Component, typename... Components>
+void World::pack(Entity entity, const Component &h, const Components &...t) {
+    pack(entity, h);
+    pack(entity, t...);
+}
+
 template <typename Component>
 inline Component &World::unpack(Entity entity) {
     // Assume component was registered when it was packed
@@ -895,9 +910,9 @@ inline Entity World::make_entity() {
     return entity;
 }
 
-inline Entity World::make_entity(Entity prefab) {
+inline Entity World::make_entity(Entity archetype) {
     auto entity = make_entity();
-    copy_entity(entity, prefab);
+    copy_entity(entity, archetype);
     return entity;
 }
 

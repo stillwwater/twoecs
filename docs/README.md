@@ -306,7 +306,7 @@ public:
 
     two::Entity make_entity();
 
-    two::Entity make_entity(two::Entity prefab);
+    two::Entity make_entity(two::Entity archetype);
 
     two::Entity make_inactive_entity();
 
@@ -319,6 +319,9 @@ public:
     template <typename Component>
     Component &pack(two::Entity entity, const Component &component);
 
+    template <typename Component, typename... Components>
+    void pack(Entity entity, const Component &h, const Components &...t);
+    
     template <typename Component>
     Component &unpack(two::Entity entity);
 
@@ -434,7 +437,7 @@ Creates a new entity in the world with an Active component.
 ### Function `two::World::make_entity`
 
 ``` cpp
-two::Entity make_entity(two::Entity prefab);
+two::Entity make_entity(two::Entity archetype);
 ```
 
 Creates a new entity and copies components from another.
@@ -497,6 +500,19 @@ Adds or replaces a component and associates an entity with the component.
 Adding components will invalidate the cache. The number of cached views is *usually* approximately equal to the number of systems, so this operation is not that expensive but you should avoid doing it every frame. This does not apply to ‘re-packing’ components (see note below).
 
 > Note: If the entity already has a component of the same type, the old component will be replaced. Replacing a component with a new instance is *much* faster than calling `remove_component` and then `pack` which would result in the cache being rebuilt twice. Replacing a component does not invalidate the cache and is cheap operation.
+
+-----
+
+### Function `two::World::pack`
+
+```cpp
+template <typename Component, typename... Components>
+void pack(Entity entity, const Component &h, const Components &...t);
+```
+
+Shortcut to pack multiple components to an entity, equivalent to calling `pack(entity, component)` for each component.
+    
+Unlike the original `pack` function, this function does not return a reference to the component that was just packed.
 
 -----
 
@@ -830,8 +846,6 @@ void collect_unused_entities();
 Recycles entity ids so that they can be safely reused. This function exists to ensure we don’t reuse entity ids that are still present in some cache even though the entity has been destroyed. This can happen since cache operations are done in a ‘lazy’ manner.
 
 This function should be called at the end of each frame.
-
------
 
 -----
 

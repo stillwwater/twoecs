@@ -37,7 +37,7 @@ public:
             vel.value.y -= 0.02f * dt;
             vel.value.z -= 0.04f * dt;
 
-            if (vel.value.x <= 0)
+            if (vel.value.x <= 0.0f)
                 world->emit(QuitEvent{});
         }
     }
@@ -59,9 +59,9 @@ public:
         make_system<MoveSystem>();
         bind<QuitEvent>(&MainWorld::quit, this);
 
-        auto entity = make_entity();
-        pack(entity, Transform{Vector3{0.0f, 0.0f, 0.0f}});
-        pack(entity, Velocity{Vector3{0.1f, 0.2f, 0.4f}});
+        pack(make_entity(),
+             Transform{Vector3{0.0f, 0.0f, 0.0f}},
+             Velocity{Vector3{0.1f, 0.2f, 0.4f}});
     }
 
     void update(float dt) override {
