@@ -5,8 +5,9 @@
 These are guarded with `#ifndef DEFINE` so you can define yourself these before including `entity.h`.
 
 ``` cpp
-// Allows size of entity types (identifiers) to be configured
-#define TWO_ENTITY_INT_TYPE uint16_t
+// By default entities are 32 bit (16 bit index, 16 bit version number).
+// Define TWO_ENTITY_64 to use 64 bit entities.
+#define TWO_ENTITY_32
 
 // Allows size of component types (identifiers) to be configured
 #define TWO_COMPONENT_INT_TYPE uint8_t
@@ -114,6 +115,36 @@ constexpr Entity NullEntity = 0;
 ```
 
 Used to represent an entity that has no value. The `NullEntity` exists in the world but has no components.
+
+-----
+
+### Function `two::entity_id`
+
+```cpp
+inline two::Entity entity_id(TWO_ENTITY_INT_TYPE i, TWO_ENTITY_INT_TYPE version);
+```
+
+Creates an Entity id from an index and version.
+
+-----
+
+### Function `two::entity_index`
+
+```cpp
+inline TWO_ENTITY_INT_TYPE entity_index(two::Entity entity);
+```
+
+Returns the index part of an entity id.
+
+---
+
+### Function `two::entity_version`
+
+```cpp
+inline TWO_ENTITY_INT_TYPE entity_version(two::Entity entity)
+```
+
+Returns the version part of an entity id.
 
 -----
 
@@ -320,7 +351,7 @@ public:
     Component &pack(two::Entity entity, const Component &component);
 
     template <typename Component, typename... Components>
-    void pack(Entity entity, const Component &h, const Components &...t);
+    void pack(two::Entity entity, const Component &h, const Components &...t);
     
     template <typename Component>
     Component &unpack(two::Entity entity);
@@ -507,7 +538,7 @@ Adding components will invalidate the cache. The number of cached views is *usua
 
 ```cpp
 template <typename Component, typename... Components>
-void pack(Entity entity, const Component &h, const Components &...t);
+void pack(two::Entity entity, const Component &h, const Components &...t);
 ```
 
 Shortcut to pack multiple components to an entity, equivalent to calling `pack(entity, component)` for each component.
@@ -884,6 +915,3 @@ void emit(const Event &event) const;
 
 Emits an event to all event handlers
 
------
-
------

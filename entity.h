@@ -29,9 +29,18 @@
 #include <functional>
 #include <cstdint>
 
-// Allows size of entity types (identifiers) to be configured
-#ifndef TWO_ENTITY_INT_TYPE
-#define TWO_ENTITY_INT_TYPE uint16_t
+// By default entities are 32 bit (16 bit index, 16 bit version number).
+// Define TWO_ENTITY_64 to use 64 bit entities.
+#ifdef TWO_ENTITY_64
+#undef TWO_ENTITY_32
+#define TWO_ENTITY_INT_TYPE uint64_t
+#define TWO_ENTITY_INDEX_MASK 0xffffffffUL
+#define TWO_ENTITY_VERSION_SHIFT 32UL
+#else
+#define TWO_ENTITY_32
+#define TWO_ENTITY_INT_TYPE uint32_t
+#define TWO_ENTITY_INDEX_MASK 0xffff
+#define TWO_ENTITY_VERSION_SHIFT 16
 #endif
 
 // Allows size of component types (identifiers) to be configured
@@ -68,6 +77,7 @@
 #    define ASSERT(exp) (void)sizeof(exp)
 #    define ASSERTS(exp, msg) (void)sizeof(exp)
 #endif
+#define ASSERT_ENTITY(entity) ASSERT(entity != NullEntity)
 
 // Extra checks that may be too slow even for debug builds
 #ifdef TWO_PARANOIA
@@ -78,12 +88,14 @@
 #define ASSERTS_PARANOIA(exp, msg) (void)sizeof(exp)
 #endif
 
-#if defined(__clang__) || defined(__GNUC__)
-#define LIKELY(x) __builtin_expect(!!(x), 1)
-#define UNLIKELY(x) __builtin_expect(!!(x), 0)
-#else
-#define LIKELY(x) (x)
-#define UNLIKELY(x) (x)
+#ifndef LIKELY
+#    if defined(__clang__) || defined(__GNUC__) || defined(__INTEL_COMPILER)
+#        define LIKELY(x) __builtin_expect(!!(x), 1)
+#        define UNLIKELY(x) __builtin_expect(!!(x), 0)
+#    else
+#        define LIKELY(x) (x)
+#        define UNLIKELY(x) (x)
+#    endif
 #endif
 
 // Print information on each entity cache operation
@@ -148,6 +160,21 @@ using EntityMask = std::bitset<TWO_COMPONENT_MAX>;
 // Used to represent an entity that has no value. The `NullEntity` exists
 // in the world but has no components.
 constexpr Entity NullEntity = 0;
+
+// Creates an Entity id from an index and version
+inline Entity entity_id(TWO_ENTITY_INT_TYPE i, TWO_ENTITY_INT_TYPE version) {
+    return i | (version << TWO_ENTITY_VERSION_SHIFT);
+}
+
+// Returns the index part of an entity id.
+inline TWO_ENTITY_INT_TYPE entity_index(Entity entity) {
+    return entity & TWO_ENTITY_INDEX_MASK;
+}
+
+// Returns the version part of an entity id.
+inline TWO_ENTITY_INT_TYPE entity_version(Entity entity) {
+    return entity >> TWO_ENTITY_VERSION_SHIFT;
+}
 
 // A simple optional type in order to support C++ 11.
 template <typename T>
@@ -617,13 +644,15 @@ private:
 };
 
 inline const EntityMask &World::get_mask(Entity entity) const {
-    return entity_masks[entity];
+    return entity_masks[entity_index(entity)];
 }
 
 template <typename Component>
 Component &World::pack(Entity entity, const Component &component) {
-    auto current_mask = entity_masks[entity];
-    auto &mask = entity_masks[entity];
+    ASSERT_ENTITY(entity);
+    auto index = entity_index(entity);
+    auto current_mask = entity_masks[index];
+    auto &mask = entity_masks[index];
 
     // Component may not have been regisered yet
     auto type = find_or_register_component<Component>();
@@ -669,6 +698,7 @@ void World::pack(Entity entity, const Component &h, const Components &...t) {
 
 template <typename Component>
 inline Component &World::unpack(Entity entity) {
+    ASSERT_ENTITY(entity);
     // Assume component was registered when it was packed
     ASSERT(component_types.find(type_id<Component>())
            != component_types.end());
@@ -718,10 +748,11 @@ void World::remove_component(Entity entity) {
         TWO_MSG("%s no longer includes entity #%x\n",
                 cached.first.to_string().c_str(), entity);
     }
-    entity_masks[entity].reset(type);
+    entity_masks[entity_index(entity)].reset(type);
 }
 
 inline void World::set_active(Entity entity, bool active) {
+    ASSERT_ENTITY(entity);
     // If active is constant this conditional should be removed when
     // the function is inlined
     if (active)
@@ -771,7 +802,7 @@ const std::vector<Entity> &World::view(bool include_inactive) {
     std::unordered_set<Entity> lookup;
 
     for (auto entity : entities) {
-        if ((mask & entity_masks[entity]) == mask) {
+        if ((mask & entity_masks[entity_index(entity)]) == mask) {
             cache.push_back(entity);
             lookup.insert(entity);
         }
@@ -911,6 +942,7 @@ inline Entity World::make_entity() {
 }
 
 inline Entity World::make_entity(Entity archetype) {
+    ASSERT_ENTITY(archetype);
     auto entity = make_entity();
     copy_entity(entity, archetype);
     return entity;
@@ -933,6 +965,9 @@ inline Entity World::make_inactive_entity() {
     } else {
         entity = unused_entities.back();
         unused_entities.pop_back();
+        auto version = entity_version(entity);
+        auto index = entity_index(entity);
+        entity = entity_id(index, version + 1);
     }
     entities.push_back(entity);
     ++alive_count;
@@ -940,8 +975,9 @@ inline Entity World::make_inactive_entity() {
 }
 
 inline void World::copy_entity(Entity dst, Entity src) {
-    auto &dst_mask = entity_masks[dst];
-    auto &src_mask = entity_masks[src];
+    ASSERT_ENTITY(dst);
+    auto &dst_mask = entity_masks[entity_index(dst)];
+    auto &src_mask = entity_masks[entity_index(src)];
     for (const auto &type_it : component_types) {
         if (!src_mask.test(type_it.second)) {
             continue;
@@ -969,13 +1005,13 @@ inline void World::copy_entity(Entity dst, Entity src) {
 }
 
 inline void World::destroy_entity(Entity entity) {
-    ASSERT(entity != NullEntity);
+    ASSERT_ENTITY(entity);
     for (auto &a : components) {
         if (a != nullptr) {
             a->remove(entity);
         }
     }
-    entity_masks[entity] = 0;
+    entity_masks[entity_index(entity)] = 0;
 
     DestroyedEntity destroyed;
     destroyed.entity = entity;

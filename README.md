@@ -1,6 +1,6 @@
 # Two ECS
 
-A single header implementation of an Entity Component System ([ECS](https://en.wikipedia.org/wiki/Entity_component_system)). Since there isn’t a strict definition of what an ECS is, this library follows the definition presented in [this GDC 2017 talk](https://www.youtube.com/watch?v=W3aieHjyNvw) on the implementation used in Overwatch. By this definition an Entity is just an id (aliased to `uint16_t` by default), a Component has no functionality, a System holds no data, and a World is a collection of Entities, Systems and Components.
+A single header implementation of an Entity Component System ([ECS](https://en.wikipedia.org/wiki/Entity_component_system)). Since there isn’t a strict definition of what an ECS is, this library follows the definition presented in [this GDC 2017 talk](https://www.youtube.com/watch?v=W3aieHjyNvw) on the implementation used in Overwatch. By this definition an Entity is just an id (aliased to `uint32_t` by default), a Component has no functionality, a System holds no data, and a World is a collection of Entities, Systems and Components.
 
 This library is probably best used as a reference for learning, since if you’re implementing a game engine you’ll likely want to implement your own ECS anyways. The library is written in C++11 so it should compile on consoles, it also does not rely on RTTI and can be compiled with `-fno-rtti` and `-fno-exceptions` (or msvc equivalents).
 

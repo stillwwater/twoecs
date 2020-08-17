@@ -10,14 +10,14 @@ While not relevant for this benchmark, `n` is the number of entities matched by 
 
 | `n` (# Entities) | `view<A>()` | `view<A, B>()` | `view<A, B, C, D>()` |
 | ---------------- | ----------- | -------------- | -------------------- |
-| 512              | 50.7 ns     | 59.6 ns        | 75.8 ns              |
-| 1024             | 67.6 ns     | 76.5 ns        | 115 ns               |
-| 2048             | 90.1 ns     | 98.3 ns        | 136 ns               |
-| 4096             | 129 ns      | 173 ns         | 173 ns               |
-| 8192             | 261 ns      | 338 ns         | 358 ns               |
-| 16384            | 769 ns      | 676 ns         | 708 ns               |
+| 512              | 66.4 ns     | 95.8 ns        | 112 ns               |
+| 1024             | 83.6 ns     | 115 ns         | 133 ns               |
+| 2048             | 132 ns      | 155 ns         | 202 ns               |
+| 4096             | 240 ns      | 348 ns         | 390 ns               |
+| 8192             | 675 ns      | 712 ns         | 692 ns               |
+| 16384            | 1297 ns     | 1312 ns        | 1536 ns              |
 
-Considering that the size of an entity is 2 bytes, at 16k entities we approaching the limits of the 32KB L1 cache. I suspect we are getting more cache misses at that range which causes the large decrease in performance.
+Considering that the size of an entity is 4 bytes, at 8k entities we approaching the limits of the 32KB L1 cache. I suspect we are getting more cache misses at that range which causes the large decrease in performance.
 
 ### `view<Components...>()` (No Cache)
 
