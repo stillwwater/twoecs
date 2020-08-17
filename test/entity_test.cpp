@@ -112,9 +112,7 @@ TEST(ECS_World, View) {
     world.set_active(e2, false);
     EXPECT_EQ(0, world.view<A>().size());
     EXPECT_EQ(1, world.view<A>(true).size());
-
-    // Currently this also returns the NullEntity
-    EXPECT_EQ(3, world.view(true).size());
+    EXPECT_EQ(2, world.view(true).size());
 
     world.set_active(e2, true);
     EXPECT_EQ(1, world.view<A>().size());

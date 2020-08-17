@@ -803,8 +803,10 @@ const std::vector<Entity> &World::view(bool include_inactive) {
 
     for (auto entity : entities) {
         if ((mask & entity_masks[entity_index(entity)]) == mask) {
-            cache.push_back(entity);
-            lookup.insert(entity);
+            if (LIKELY(entity != NullEntity)) {
+                cache.push_back(entity);
+                lookup.insert(entity);
+            }
         }
     }
     view_cache.emplace(std::make_pair(mask,
