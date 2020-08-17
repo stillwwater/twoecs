@@ -21,7 +21,7 @@ Considering that the size of an entity is 4 bytes, at 8k entities we approaching
 
 ### `view<Components...>()` (No Cache)
 
-Viewing (matching) `n` entities with 1, 2, or 4 components. Here we assume no cache with the requested components exists. This case is only likely to occur in the first frame after the world is created. This is a worst case for the `view` operation, even operations that invalidate the cache (like `remove_component(entity)` are unlikely to cause a cache to be rebuilt entirely.
+Viewing (matching) `n` entities with 1, 2, or 4 components. Here we assume no cache with the requested components exists. This case is only likely to occur in the first frame after the world is created. This is a worst case for the `view` operation, even operations that invalidate the cache (like `remove(entity)` are unlikely to cause a cache to be rebuilt entirely.
 
 Note that we are using milliseconds here instead of nanoseconds.
 
@@ -58,4 +58,3 @@ Call `fn` with each component unpacked from the matched entity. This function ca
 | 1024             | 0.035 ms                        |
 | 2048             | 0.070 ms                        |
 | 4096             | 0.141 ms                        |
-

@@ -98,6 +98,11 @@
 #    endif
 #endif
 
+// Allows C++ 17 like folding of template parameter packs in expressions
+#define TWO_TEMPLATE_FOLD(exp)               \
+    using Expand_ = char[];                  \
+    (void)Expand_{((void)(exp), char(0))...}
+
 // Print information on each entity cache operation
 #ifdef TWO_DEBUG_ENTITY
 #include <cstdio>
@@ -153,7 +158,7 @@ static_assert(std::is_integral<ComponentType>(),
 // Holds information on which components are attached to an entity.
 // 1 bit is used for each component type.
 // Note: Do not serialize an entity mask since which bit represents a
-// given component may change. Use the has_component<Component> function
+// given component may change. Use the contains<Component> function
 // instead.
 using EntityMask = std::bitset<TWO_COMPONENT_MAX>;
 
@@ -264,6 +269,7 @@ public:
     // Copy component to `dst` from `src`.
     void copy(Entity dst, Entity src) override;
 
+    // Returns true if the entity has a component of type T.
     inline bool contains(Entity entity) const;
 
     // Returns the number of valid components in the packed array.
@@ -362,7 +368,7 @@ public:
     //
     // > Note: If the entity already has a component of the same type, the old
     // component will be replaced. Replacing a component with a new instance
-    // is *much* faster than calling `remove_component` and then `pack` which
+    // is *much* faster than calling `remove` and then `pack` which
     // would result in the cache being rebuilt twice. Replacing a component
     // does not invalidate the cache and is cheap operation.
     template <typename Component>
@@ -373,29 +379,29 @@ public:
     //
     // Unlike the original `pack` function, this function does not return a
     // reference to the component that was just packed.
-    template <typename Component, typename... Components>
-    void pack(Entity entity, const Component &h, const Components &...t);
+    template <typename C0, typename... Cn>
+    void pack(Entity entity, const C0 &component, const Cn &...components);
 
     // Returns a component of the given type associated with an entity.
     // This function will only check if the component does not exist for an
     // entity if assertions are enabled, otherwise it is unchecked.
-    // Use has_component if you need to verify the existence of a component
+    // Use contains if you need to verify the existence of a component
     // before removing it. This is a cheap operation.
     //
     // This function returns a reference to a component in the packed array.
-    // The reference may become invalid after `remove_component` is called
-    // since `remove_component` may move components in memory.
+    // The reference may become invalid after `remove` is called since `remove`
+    // may move components in memory.
     //
     //     auto &a = world.unpack<A>(entity1);
     //     a.x = 5; // a is a valid reference and x will be updated.
     //
     //     auto b = world.unpack<B>(entity1); // copy B
-    //     world.remove_component<B>(entity2);
+    //     world.remove<B>(entity2);
     //     b.x = 5;
     //     world.pack(entity1, b); // Ensures b will be updated in the array
     //
     //     auto &c = world.unpack<C>(entity1);
-    //     world.remove_component<C>(entity2);
+    //     world.remove<C>(entity2);
     //     c.x = 5; // may not update c.x in the array
     //
     // If you plan on holding the reference it is better to copy the
@@ -414,17 +420,21 @@ public:
     // Returns true if a component of the given type is associated with an
     // entity. This is a cheap operation.
     template <typename Component>
-    inline bool has_component(Entity entity) const;
+    inline bool contains(Entity entity) const;
+
+    // Returns true if an entity contains all given components.
+    template <typename C0, typename C1, typename... Cn>
+    inline bool contains(Entity entity) const;
 
     // Removes a component from an entity. Removing components invalidates
     // the cache.
     //
     // This function will only check if the component does not exist for an
     // entity if assertions are enabled, otherwise it is unchecked. Use
-    // has_component if you need to verify the existence of a component before
+    // `contains` if you need to verify the existence of a component before
     // removing it.
     template <typename Component>
-    void remove_component(Entity entity);
+    void remove(Entity entity);
 
     // Adds or removes an Active component
     inline void set_active(Entity entity, bool active);
@@ -447,7 +457,7 @@ public:
     // The cost of rebuilding the cache depends on how many diff operations
     // are needed. Any operation that changes whether an entity should be
     // in this cache (does the entity have all requested components?) counts
-    // as a single Add or Remove diff. Functions like `remove_component`,
+    // as a single Add or Remove diff. Functions like `remove`,
     // `make_entity`, `pack`, `destroy_entity` may cause a cache to be
     // invalidated. Functions that may invalidate the cache are documented.
     template <typename... Components>
@@ -690,10 +700,10 @@ Component &World::pack(Entity entity, const Component &component) {
     return new_component;
 }
 
-template <typename Component, typename... Components>
-void World::pack(Entity entity, const Component &h, const Components &...t) {
-    pack(entity, h);
-    pack(entity, t...);
+template <typename C0, typename... Cn>
+void World::pack(Entity entity, const C0 &component, const Cn &...components) {
+    pack(entity, component);
+    pack(entity, components...);
 }
 
 template <typename Component>
@@ -709,7 +719,7 @@ inline Component &World::unpack(Entity entity) {
 }
 
 template <typename Component>
-inline bool World::has_component(Entity entity) const {
+inline bool World::contains(Entity entity) const {
     // This function must work if a component has never been registered,
     // since it's reasonable to check if an entity has a component when
     // a component type has never been added to any entity.
@@ -722,8 +732,15 @@ inline bool World::has_component(Entity entity) const {
     return a->contains(entity);
 }
 
+template <typename C0, typename C1, typename... Cn>
+inline bool World::contains(Entity entity) const {
+    return contains<C0>(entity)
+        && contains<C1>(entity)
+        && contains<Cn...>(entity);
+}
+
 template <typename Component>
-void World::remove_component(Entity entity) {
+void World::remove(Entity entity) {
     // Assume component was registered when it was packed
     ASSERT(component_types.find(type_id<Component>())
            != component_types.end());
@@ -758,7 +775,7 @@ inline void World::set_active(Entity entity, bool active) {
     if (active)
         pack(entity, Active{});
     else
-        remove_component<Active>(entity);
+        remove<Active>(entity);
 }
 
 template <typename... Components>
@@ -767,15 +784,8 @@ const std::vector<Entity> &World::view(bool include_inactive) {
         find_or_register_component<Active>();
 
     EntityMask mask;
-
-    // Need the alias for msvc
-    using Expand = int[];
-    (void)Expand{
-        ((void)(mask.set(
-            // Component may not have been registered
-            find_or_register_component<Components>())), 0)
-        ...
-    };
+    // Component may not have been registered
+    TWO_TEMPLATE_FOLD(mask.set(find_or_register_component<Components>()));
 
     if (!include_inactive) {
         mask.set(active_component_t);

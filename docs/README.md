@@ -104,7 +104,7 @@ using EntityMask = std::bitset<TWO_COMPONENT_MAX>;
 
 Holds information on which components are attached to an entity.
 
-1 bit is used for each component type. Note: Do not serialize an entity mask since which bit represents a given component may change. Use the `has_component<Component>` function instead.
+1 bit is used for each component type. Note: Do not serialize an entity mask since which bit represents a given component may change. Use the `contains<Component>` function instead.
 
 -----
 
@@ -352,15 +352,15 @@ public:
 
     template <typename Component, typename... Components>
     void pack(two::Entity entity, const Component &h, const Components &...t);
-    
+
     template <typename Component>
     Component &unpack(two::Entity entity);
 
     template <typename Component>
-    bool has_component(two::Entity entity);
+    bool contains(two::Entity entity);
 
     template <typename Component>
-    void remove_component(two::Entity entity);
+    void remove(two::Entity entity);
 
     template <typename Component>
     void register_component();
@@ -411,7 +411,7 @@ public:
     void emit(const Event &event) const;
 
     inline void clear_event_channels();
-    
+
     template <typename Component>
     two::ComponentType find_or_register_component();
 
@@ -530,7 +530,7 @@ Adds or replaces a component and associates an entity with the component.
 
 Adding components will invalidate the cache. The number of cached views is *usually* approximately equal to the number of systems, so this operation is not that expensive but you should avoid doing it every frame. This does not apply to ‘re-packing’ components (see note below).
 
-> Note: If the entity already has a component of the same type, the old component will be replaced. Replacing a component with a new instance is *much* faster than calling `remove_component` and then `pack` which would result in the cache being rebuilt twice. Replacing a component does not invalidate the cache and is cheap operation.
+> Note: If the entity already has a component of the same type, the old component will be replaced. Replacing a component with a new instance is *much* faster than calling `remove` and then `pack` which would result in the cache being rebuilt twice. Replacing a component does not invalidate the cache and is cheap operation.
 
 -----
 
@@ -542,7 +542,7 @@ void pack(two::Entity entity, const Component &h, const Components &...t);
 ```
 
 Shortcut to pack multiple components to an entity, equivalent to calling `pack(entity, component)` for each component.
-    
+
 Unlike the original `pack` function, this function does not return a reference to the component that was just packed.
 
 -----
@@ -558,19 +558,19 @@ Returns a component of the given type associated with an entity.
 
 This function will only check if the component does not exist for an entity if assertions are enabled, otherwise it is unchecked. Use has\_component if you need to verify the existence of a component before removing it. This is a cheap operation.
 
-This function returns a reference to a component in the packed array. The reference may become invalid after `remove_component` is called since `remove_component` may move components in memory.
+This function returns a reference to a component in the packed array. The reference may become invalid after `remove` is called since `remove` may move components in memory.
 
 ```cpp
 auto &a = world.unpack<A>(entity1);
 a.x = 5; // a is a valid reference and x will be updated.
 
 auto b = world.unpack<B>(entity1); // copy B
-world.remove_component<B>(entity2);
+world.remove<B>(entity2);
 b.x = 5;
 world.pack(entity1, b); // Ensures b will be updated in the array
 
 auto &c = world.unpack<C>(entity1);
-world.remove_component<C>(entity2);
+world.remove<C>(entity2);
 c.x = 5; // may not update c.x in the array
 ```
 
@@ -580,22 +580,22 @@ If you plan on holding the reference it is better to copy the component and then
 
 -----
 
-### Function `two::World::has_component`
+### Function `two::World::contains`
 
 ``` cpp
 template <typename Component>
-bool has_component(two::Entity entity);
+bool contains(two::Entity entity);
 ```
 
 Returns true if a component of the given type is associated with an entity. This is a cheap operation.
 
 -----
 
-### Function `two::World::remove_component`
+### Function `two::World::remove`
 
 ``` cpp
 template <typename Component>
-void remove_component(two::Entity entity);
+void remove(two::Entity entity);
 ```
 
 Removes a component from an entity. Removing components invalidates the cache.
@@ -643,7 +643,7 @@ for (auto entity : view<A, B, C>()) {
 
 The first call to this function will build a cache with the entities that contain the requested components, subsequent calls will return the cached data as long as the data is still valid. If a cache is no longer valid, this function will rebuild the cache by applying all necessary diffs to make the cache valid.
 
-The cost of rebuilding the cache depends on how many diff operations are needed. Any operation that changes whether an entity should be in this cache (does the entity have all requested components?) counts as a single Add or Remove diff. Functions like `remove_component`, `make_entity`, `pack`, `destroy_entity` may cause a cache to be invalidated. Functions that may invalidate the cache are documented.
+The cost of rebuilding the cache depends on how many diff operations are needed. Any operation that changes whether an entity should be in this cache (does the entity have all requested components?) counts as a single Add or Remove diff. Functions like `remove`, `make_entity`, `pack`, `destroy_entity` may cause a cache to be invalidated. Functions that may invalidate the cache are documented.
 
 -----
 
@@ -914,4 +914,3 @@ void emit(const Event &event) const;
 ```
 
 Emits an event to all event handlers
-
