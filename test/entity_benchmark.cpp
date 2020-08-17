@@ -4,14 +4,10 @@
 #include "../entity.h"
 
 // Some dummy components
-struct ComponentData {
-    char value[16];
-};
-
-using A = ComponentData;
-using B = ComponentData;
-using C = ComponentData;
-using D = ComponentData;
+struct A { int data; };
+struct B { int data; };
+struct C { int data; };
+struct D { int data; };
 
 template <typename... Components>
 static void make_entities(two::World *world, int n) {
