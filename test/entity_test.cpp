@@ -111,6 +111,25 @@ TEST(ECS_World, View) {
     EXPECT_EQ(1, world.view<A>().size());
 }
 
+TEST(ECS_World, ViewEach) {
+    two::World world;
+    auto e0 = world.make_entity();
+    auto &a = world.pack(e0, A{12});
+    world.pack(e0, B{24});
+
+    world.each<A, B>([e0](two::Entity entity, A &a, B &b) {
+        EXPECT_EQ(entity, e0);
+        EXPECT_EQ(12, a.data);
+        EXPECT_EQ(24, b.data);
+    });
+    world.each<A, B>([](A &a, B &b) {
+        EXPECT_EQ(12, a.data);
+        EXPECT_EQ(24, b.data);
+        a.data = 16;
+    });
+    EXPECT_EQ(16, a.data);
+}
+
 TEST(ECS_World, MakeSystem) {
     two::World world;
     auto *s0 = world.make_system<SystemA>();

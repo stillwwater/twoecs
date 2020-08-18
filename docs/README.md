@@ -317,6 +317,9 @@ Returns the number of valid components in the packed array.
 ``` cpp
 class World {
 public:
+    template <typename T>
+    using ViewFunc = typename std::common_type<std::function<T>>::type;
+
     World() = default;
 
     World(const two::World &) = delete;
@@ -370,9 +373,12 @@ public:
     template <typename... Components>
     const std::vector<Entity> &view(bool include_inactive = false);
 
-    template <typename... Components, typename Func>
-    void each(Func &&fn, bool include_inactive = false);
+    template <typename... Components>
+    inline void each(ViewFunc<void (Components &...)> &&fn, bool include_inactive = false);
 
+    template <typename... Components>
+    inline void each(ViewFunc<void (Entity, Components &...)> &&fn, bool include_inactive = false);
+    
     template <typename... Components>
     Optional<two::Entity> view_one(bool include_inactive = false);
 
@@ -650,13 +656,32 @@ The cost of rebuilding the cache depends on how many diff operations are needed.
 ### Function `two::World::each`
 
 ```cpp
-template <typename... Components, typename Func>
-void each(Func &&fn, bool include_inactive = false);
+template <typename... Components>
+inline void each(ViewFunc<void (Components &...)> &&fn, bool include_inactive = false);
 ```
 
  Calls `fn` with each unpacked component for every entity with all requested components.
 ```cpp
 each<A, B, C>([](A &a, B &b, C &c) {
+    // ...
+});
+```
+
+This function calls `view<Components...>()` internally so the same notes about `view` apply here as well.
+
+-----
+
+### Function `two::World::each`
+
+```cpp
+template <typename... Components>
+inline void each(ViewFunc<void (two::Entity, Components &...)> &&fn, bool include_inactive = false);
+```
+
+Calls `fn` with the entity and a reference to each unpacked component for every entity with all requested components.
+
+```cpp
+each<A, B, C>([](Entity entity, A &a, B &b, C &c) {
     // ...
 });
 ```

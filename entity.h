@@ -309,6 +309,9 @@ private:
 // A world holds a collection of systems, components and entities.
 class World {
 public:
+    template <typename T>
+    using ViewFunc = typename std::common_type<std::function<T>>::type;
+
     World() = default;
 
     World(const World &) = delete;
@@ -463,8 +466,8 @@ public:
     template <typename... Components>
     const std::vector<Entity> &view(bool include_inactive = false);
 
-    // Calls `fn` with each unpacked component for every entity with all
-    // requested components.
+    // Calls `fn` with a reference to each unpacked component for every entity
+    // with all requested components.
     //
     //     each<A, B, C>([](A &a, B &b, C &c) {
     //         // ...
@@ -472,8 +475,22 @@ public:
     //
     // This function calls `view<Components...>()` internally so the same
     // notes about `view` apply here as well.
-    template <typename... Components, typename Func>
-    inline void each(Func &&fn, bool include_inactive = false);
+    template <typename... Components>
+    inline void each(ViewFunc<void (Components &...)> &&fn,
+                     bool include_inactive = false);
+
+    // Calls `fn` with the entity and a reference to each unpacked component
+    // for every entity with all requested components.
+    //
+    //     each<A, B, C>([](Entity entity, A &a, B &b, C &c) {
+    //         // ...
+    //     });
+    //
+    // This function calls `view<Components...>()` internally so the same
+    // notes about `view` apply here as well.
+    template <typename... Components>
+    inline void each(ViewFunc<void (Entity, Components &...)> &&fn,
+                     bool include_inactive = false);
 
     // Returns the **first** entity that contains all components requested.
     // Views always keep entities in the order that the entity was
@@ -825,15 +842,19 @@ const std::vector<Entity> &World::view(bool include_inactive) {
     return view_cache[mask].entities;
 }
 
-template <typename... Components, typename Func>
-inline void World::each(Func &&fn, bool include_inactive) {
-    static_assert(
-        std::is_convertible<Func &&,
-            std::function<void (Components &...)>>::value,
-        "Incompatible function signature");
-
+template <typename... Components>
+inline void World::each(ViewFunc<void (Components &...)> &&fn,
+                        bool include_inactive) {
     for (const auto entity : view<Components...>(include_inactive)) {
         fn(unpack<Components>(entity)...);
+    }
+}
+
+template <typename... Components>
+inline void World::each(ViewFunc<void (Entity, Components &...)> &&fn,
+                        bool include_inactive) {
+    for (const auto entity : view<Components...>(include_inactive)) {
+        fn(entity, unpack<Components>(entity)...);
     }
 }
 
@@ -964,7 +985,7 @@ inline Entity World::make_inactive_entity() {
     Entity entity;
     if (unused_entities.empty()) {
         ASSERTS(alive_count < TWO_ENTITY_MAX, "Too many entities");
-        entity = alive_count;
+        entity = alive_count++;
 
         // Create a nullentity that will never have any components
         // This is useful when we need to store entities in an array and
@@ -982,7 +1003,6 @@ inline Entity World::make_inactive_entity() {
         entity = entity_id(index, version + 1);
     }
     entities.push_back(entity);
-    ++alive_count;
     return entity;
 }
 

@@ -1,3 +1,5 @@
+#include <memory>
+
 #include "benchmark/benchmark.h"
 
 // With this many entities the World must be heap allocated

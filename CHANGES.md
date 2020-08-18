@@ -1,5 +1,10 @@
 # Change Log
 
+2020-08-18
+----------
+
+* Added `World::each` overload where the function argument takes in an `Entity` as the first parameter.
+
 2020-08-17
 ----------
 
