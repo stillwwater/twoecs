@@ -1,9 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(twoecs)
-
-# Benchmark uses some C++ 17 features but entity.h only requires C++ 11
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 11)
 
 if (MSVC)
     set(CMAKE_CXX_WARNING_LEVEL 4)

@@ -1,60 +1,66 @@
 # Benchmarks
 
-All benchmarks were run on a Intel 7th gen cpu @4.0GHz with 32KB of L1 cache, and compiled with clang 10 with `-O3`. In summary, all entity operations that are done every frame are well under 1 ms and are unlikely to be the bottleneck in your engine.
+All benchmarks were run on a Intel 7th gen cpu @4.0GHz with 32KB of L1 cache, and compiled with clang 10 with `-O3`.
 
-###  `view<Components...>()` (Cached)
+[source](../test/entity_benchmark.cpp)
 
-Viewing (matching) `n` entities with 1, 2, or 4 components. This assumes the cache with the requested components is valid and does not need to be modified. This is a best (and usually the most common) case for the `view` operation.
+### Iterate `N` entities and unpack `M` components
 
-While not relevant for this benchmark, `n` is the number of entities matched by `view<Components...>()` not the total number of entities in the world.
+| Number of Entities | 1 Component | 2 Components | 4 Components |
+| ------------------ | ----------- | ------------ | ------------ |
+| 256                | 0.004 ms    | 0.008 ms     | 0.016 ms     |
+| 512                | 0.008 ms    | 0.016 ms     | 0.032 ms     |
+| 4k                 | 0.065 ms    | 0.128 ms     | 0.254 ms     |
+| 32k                | 0.607 ms    | 1.15 ms      | 2.19 ms      |
+| 250k               | 5.15 ms     | 9.39 ms      | 17.8 ms      |
+| 1M                 | 23.3 ms     | 41.1 ms      | 81.0 ms      |
 
-| `n` (# Entities) | `view<A>()` | `view<A, B>()` | `view<A, B, C, D>()` |
-| ---------------- | ----------- | -------------- | -------------------- |
-| 512              | 66.4 ns     | 95.8 ns        | 112 ns               |
-| 1024             | 83.6 ns     | 115 ns         | 133 ns               |
-| 2048             | 132 ns      | 155 ns         | 202 ns               |
-| 4096             | 240 ns      | 348 ns         | 390 ns               |
-| 8192             | 675 ns      | 712 ns         | 692 ns               |
-| 16384            | 1297 ns     | 1312 ns        | 1536 ns              |
+```cpp
+for (auto entity : world->view<Components...>()) {
+    auto &a = world->unpack<A>(entity);
+    // ...
+}
+```
 
-Considering that the size of an entity is 4 bytes, at 8k entities we approaching the limits of the 32KB L1 cache. I suspect we are getting more cache misses at that range which causes the large decrease in performance.
+### Iterate `N` entities and unpack `M` components (lambda version)
 
-### `view<Components...>()` (No Cache)
+| Number of Entities | 1 Component | 2 Components |
+| ------------------ | ----------- | ------------ |
+| 256                | 0.004 ms    | 0.008 ms     |
+| 512                | 0.008 ms    | 0.016 ms     |
+| 4k                 | 0.064 ms    | 0.128 ms     |
+| 32k                | 0.607 ms    | 1.15 ms      |
+| 250k               | 4.99 ms     | 9.27 ms      |
+| 1M                 | 21.43 ms    | 37.1 ms      |
 
-Viewing (matching) `n` entities with 1, 2, or 4 components. Here we assume no cache with the requested components exists. This case is only likely to occur in the first frame after the world is created. This is a worst case for the `view` operation, even operations that invalidate the cache (like `remove(entity)` are unlikely to cause a cache to be rebuilt entirely.
+```cpp
+world->each<A, B>([](A &a, B &b) {
+    // ...
+});
+```
 
-Note that we are using milliseconds here instead of nanoseconds.
+### Create `N` entities and pack 1 component
 
-| `n` (# Entities) | `view<A>()` | `view<A, B>()` | `view<A, B, C, D>()` |
-| ---------------- | ----------- | -------------- | -------------------- |
-| 512              | 0.021 ms    | 0.021 ms       | 0.021 ms             |
-| 1024             | 0.041 ms    | 0.041 ms       | 0.042 ms             |
-| 2048             | 0.081 ms    | 0.081 ms       | 0.082 ms             |
-| 4096             | 0.165 ms    | 0.165 ms       | 0.164 ms             |
+| Number of Entities | Time     |
+| ------------------ | -------- |
+| 256                | 0.038 ms |
+| 512                | 0.075 ms |
+| 4k                 | 0.619 ms |
+| 32k                | 5.12 ms  |
 
-In this case the performance decreases linearly with the number of entities, regardless of the number of components. As the difference in time given a number of components is so small (as seen in the previous benchmark), it is unlikely to show up at this time scale.
+```cpp
+for (int64_t i = 0; i < N; ++i) {
+    world->pack(world->make_entity(), A{});
+}
+```
 
-### `unpack<Component>(entity)`
+### Emit 2 events to `N` listeners
 
-Retrieve a component from an entity. This is done `n` times by iterating through the entities returned from `view<A>()`. The `Time / n` column shows the time taken by each `unpack` operation.
-
-| `n` (# Entities) | Time     | Time / `n` |
-| ---------------- | -------- | ---------- |
-| 1                | 382 ns   | 382 ns     |
-| 8                | 486 ns   | 60.75 ns   |
-| 64               | 1372 ns  | 21.44 ns   |
-| 512              | 8509 ns  | 16.62 ns   |
-| 4096             | 65852 ns | 16.02 ns   |
-
-Note that the time per `unpack` operation decreases as we iterate through more entities before leveling off at ~16 ns. I suspect this is at least partly to do with the fact that components being accessed are being cached.
-
-### ```each<Components...>(fn)```
-
-Call `fn` with each component unpacked from the matched entity. This function calls `view<Components...>()` and unpacks each component for each entity.
-
-| `n` (# Entities) | `each<A, B>([](A &a, B &b) {})` |
-| ---------------- | ------------------------------- |
-| 512              | 0.017 ms                        |
-| 1024             | 0.035 ms                        |
-| 2048             | 0.070 ms                        |
-| 4096             | 0.141 ms                        |
+| Number of Listeners | Time     |
+| ------------------- | -------- |
+| 256                 | 0.004 ms |
+| 512                 | 0.008 ms |
+| 4k                  | 0.068 ms |
+| 32k                 | 0.590 ms |
+| 250k                | 4.35 ms  |
+| 1M                  | 17.3 ms  |

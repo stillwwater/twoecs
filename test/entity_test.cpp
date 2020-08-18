@@ -134,15 +134,15 @@ TEST(ECS_World, MakeSystem) {
 TEST(ECS_World, Events) {
     two::World world;
     int res = 0;
-    world.bind<int>([&res](auto &) {
+    world.bind<int>([&res](const int &) {
         res = -1;
         return false;
     });
-    world.bind<int>([&res](auto &event) {
+    world.bind<int>([&res](const int &event) {
         res = event;
         return true;
     });
-    world.bind<int>([&res](auto &) {
+    world.bind<int>([&res](const int &) {
         res = -2;
         return true;
     });
