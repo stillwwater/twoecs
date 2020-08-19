@@ -5,6 +5,8 @@
 
 * Added `World::each` overload where the function argument takes in an `Entity` as the first parameter.
 
+* Replace `std::unordered_map` in `ComponentArray` with a sparse to speed up entity -> component lookup.
+
 2020-08-17
 ----------
 

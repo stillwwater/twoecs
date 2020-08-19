@@ -58,6 +58,11 @@
 #define TWO_COMPONENT_MAX 64
 #endif
 
+// Defined the number of entities per component array page.
+#ifndef TWO_COMPONENT_ARRAY_PAGE_SIZE
+#define TWO_COMPONENT_ARRAY_PAGE_SIZE 4096
+#endif
+
 // Allows a custom allocator to be used to store component data
 #ifndef TWO_COMPONENT_ARRAY_ALLOCATOR
 #define TWO_COMPONENT_ARRAY_ALLOCATOR std::allocator
@@ -166,6 +171,12 @@ using EntityMask = std::bitset<TWO_COMPONENT_MAX>;
 // in the world but has no components.
 constexpr Entity NullEntity = 0;
 
+// Used to represent an invalid entity index in the ComponentArray.
+// Prefer using NullEntity to represent an empty entity, this exists as
+// `0` is still a valid index into a component array since indecies in
+// the component array don't map directly to entities.
+constexpr TWO_ENTITY_INT_TYPE InvalidIndex = TWO_ENTITY_INDEX_MASK;
+
 // Creates an Entity id from an index and version
 inline Entity entity_id(TWO_ENTITY_INT_TYPE i, TWO_ENTITY_INT_TYPE version) {
     return i | (version << TWO_ENTITY_VERSION_SHIFT);
@@ -242,10 +253,6 @@ public:
     // number of entities.
     using PackedSizeType = TWO_ENTITY_INT_TYPE;
 
-    // Approximate amount of memory reserved when the array is initialized,
-    // used to reduce the amount of initial allocations.
-    static constexpr size_t MinSize = 1024;
-
     ComponentArray();
 
     // Returns a component of type T given an Entity.
@@ -280,7 +287,7 @@ private:
     std::vector<T, TWO_COMPONENT_ARRAY_ALLOCATOR<T>> packed_array;
 
     // Maps an Entity id to an index in the packed array.
-    std::unordered_map<Entity, PackedSizeType> entity_to_packed;
+    std::vector<std::unique_ptr<PackedSizeType[]>> sparse_array;
 
     // Maps an index in the packed component array to an Entity.
     std::unordered_map<PackedSizeType, Entity> packed_to_entity;
@@ -288,6 +295,12 @@ private:
     // Number of valid entries in the packed array, other entries beyond
     // this count may be uninitialized or invalid data.
     size_t packed_count = 0;
+
+    // Returns the index into the packed array from an Entity
+    size_t find_index(Entity entity) const;
+
+    // Sets the index into the packed array
+    void insert_index(Entity entity, PackedSizeType value);
 };
 
 // An event channel handles events for a single event type.
@@ -1179,28 +1192,31 @@ inline void World::unload() {}
 
 template <typename T>
 inline ComponentArray<T>::ComponentArray() {
+    // Approximate amount of memory reserved when the array is initialized,
+    // used to reduce the amount of initial allocations.
+    constexpr size_t MinSize = 1024;
     packed_array.reserve(MinSize / sizeof(T));
 }
 
 template <typename T>
 inline T &ComponentArray<T>::read(Entity entity) {
-    ASSERTS(entity_to_packed.find(entity) != entity_to_packed.end(),
+    ASSERTS(find_index(entity) != InvalidIndex,
             "Missing component on Entity.");
-    return packed_array[entity_to_packed[entity]];
+    return packed_array[find_index(entity)];
 }
 
 template <typename T>
 T &ComponentArray<T>::write(Entity entity, const T &component) {
-    if (entity_to_packed.find(entity) != entity_to_packed.end()) {
+    auto pos = find_index(entity);
+    if (pos != InvalidIndex) {
         // Replace component
-        auto pos = entity_to_packed[entity];
         packed_array[pos] = component;
         return packed_array[pos];
     }
     ASSERT(packed_count < TWO_ENTITY_MAX);
 
-    auto pos = packed_count++;
-    entity_to_packed[entity] = pos;
+    pos = packed_count++;
+    insert_index(entity, pos);
     packed_to_entity[pos] = entity;
 
     if (pos < packed_array.size())
@@ -1213,7 +1229,8 @@ T &ComponentArray<T>::write(Entity entity, const T &component) {
 
 template <typename T>
 void ComponentArray<T>::remove(Entity entity) {
-    if (entity_to_packed.find(entity) == entity_to_packed.end()) {
+    auto removed = find_index(entity);
+    if (removed == InvalidIndex) {
         // This is a no-op since calling this as a virtual member function
         // means there is no way for the caller to check if the entity
         // contains a component. `contains` is not virtual as it needs to
@@ -1222,7 +1239,6 @@ void ComponentArray<T>::remove(Entity entity) {
     }
     // Move the last component into the empty slot to keep the array packed
     auto last = packed_count - 1;
-    auto removed = entity_to_packed[entity];
     packed_array[removed] = packed_array[last];
 
     // Need to know which entity "owns" the component we just moved
@@ -1231,9 +1247,8 @@ void ComponentArray<T>::remove(Entity entity) {
 
     // Update the entity that has its component moved to reference
     // the new location in the packed array
-    entity_to_packed[moved_entity] = removed;
-
-    entity_to_packed.erase(entity);
+    insert_index(moved_entity, removed);
+    insert_index(entity, InvalidIndex);
     packed_to_entity.erase(last);
     --packed_count;
 }
@@ -1245,7 +1260,40 @@ void ComponentArray<T>::copy(Entity dst, Entity src) {
 
 template <typename T>
 inline bool ComponentArray<T>::contains(Entity entity) const {
-    return entity_to_packed.find(entity) != entity_to_packed.end();
+    return find_index(entity) != InvalidIndex;
+}
+
+template <typename T>
+size_t ComponentArray<T>::find_index(Entity entity) const {
+    constexpr auto PageSize = TWO_COMPONENT_ARRAY_PAGE_SIZE;
+    auto i = entity_index(entity);
+    auto page = i / PageSize;
+    auto index = i & (PageSize - 1);
+
+    if (page >= sparse_array.size()) {
+        return InvalidIndex;
+    }
+    ASSERT(sparse_array[page] != nullptr);
+    return sparse_array[page][index];
+}
+
+template <typename T>
+void ComponentArray<T>::insert_index(Entity entity, PackedSizeType value) {
+    constexpr auto PageSize = TWO_COMPONENT_ARRAY_PAGE_SIZE;
+    auto i = entity_index(entity);
+    auto page = i / PageSize;
+    auto index = i & (PageSize - 1);
+
+    if (sparse_array.size() <= page) {
+        sparse_array.resize(page + 1);
+    }
+    if (sparse_array[page] == nullptr) {
+        auto p =
+            std::unique_ptr<PackedSizeType[]>(new PackedSizeType[PageSize]);
+        std::fill(p.get(), p.get() + PageSize, InvalidIndex);
+        sparse_array[page] = std::move(p);
+    }
+    sparse_array[page][index] = value;
 }
 
 inline void System::load(World *) {}
