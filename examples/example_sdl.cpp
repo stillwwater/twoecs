@@ -20,7 +20,7 @@ constexpr float EmitterY     = WindowY / 2.f;
 constexpr float MinLifetime  = 1.f;
 constexpr float MaxLifetime  = 5.f;
 constexpr int   MaxParticles = 8192;
-constexpr float MaxSpeed     = 600.f;
+constexpr float MaxSpeed     = 200.f;
 constexpr float MinSize      = 8.f;
 constexpr float MaxSize      = 16.f;
 constexpr float Gravity      = 1000.f;
@@ -45,6 +45,10 @@ float2 operator*(const float2 &a, float s) {
     return {a.x * s, a.y * s};
 }
 
+float dot(const float2 &a, const float2 &b) {
+    return a.x * b.x + a.y * b.y;
+}
+
 struct Color {
     uint8_t r, g, b, a;
 
@@ -62,7 +66,11 @@ static float randf(float a, float b) {
 }
 
 static float2 rand_dir(float scale = 1.f) {
-    return float2(randf(-1.f, 1.f), randf(-1.f, 1.f)) * scale;
+    for (;;) {
+        float2 v(randf(-1.f, 1.f), randf(-1.f, 1.f));
+        if (dot(v, v) <= 1.f)
+            return v * scale;
+    }
 }
 
 static float remap(float a, float b, float c, float d, float x) {

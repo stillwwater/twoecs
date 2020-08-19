@@ -1,72 +1,69 @@
 # Two ECS
 
-A single header implementation of an Entity Component System ([ECS](https://en.wikipedia.org/wiki/Entity_component_system)). Since there isn’t a strict definition of what an ECS is, this library follows the definition presented in [this GDC 2017 talk](https://www.youtube.com/watch?v=W3aieHjyNvw) on the implementation used in Overwatch. By this definition an Entity is just an id (aliased to `uint32_t` by default), a Component has no functionality, a System holds no data, and a World is a collection of Entities, Systems and Components.
+A single header implementation of ECS. Since there isn’t a strict definition of what an ECS is, this library follows the definition presented in [this GDC 2017 talk](https://www.youtube.com/watch?v=W3aieHjyNvw) on the implementation used in Overwatch. By this definition an Entity is just an id (aliased to `uint32_t` by default), a Component has no functionality, a System holds no data, and a World is a collection of Entities, Systems and Components.
 
-This library is probably best used as a reference for learning, since if you’re implementing a game engine you’ll likely want to implement your own ECS anyways. The library is written in C++11 so it should compile on consoles, it also does not rely on RTTI and can be compiled with `-fno-rtti` and `-fno-exceptions` (or msvc equivalents).
+This library is probably best used as a reference for learning, since if you’re implementing a game engine you’ll likely want to implement your own ECS anyways. The library is written in C++11 and does not use RTTI or exceptions.
 
-A minimal example (for the complete API documentation see the [docs](./docs/README.md))
+## A minimal example
+
+For the complete API documentation see the [docs](./docs/README.md). For a more complete example see the [SDL2 implemementation of a simple particle system](./examples/example_sdl.cpp).
+
+### Components
+
+Any struct that is copy constructible and copy assignable can be used as a component. Components do not need to be registered before they are used.
 
 ```cpp
-// A simple 3D vector
-struct Vector3 {
-    float x, y, z;
+struct Position {
+    float x, y;
 };
 
-// A transform component,
-// note that we don't need to register the component type.
-struct Transform {
-    Vector3 position;
-};
-
-// And a velocity component. Any struct can be used as a component
-// as long as it is copyable.
 struct Velocity {
-    Vector3 value;
+    float x, y;
 };
+```
 
-// An event
-struct QuitEvent {};
-
+### Systems
+```cpp
 class MoveSystem : public two::System {
 public:
     void update(two::World *world, float dt) override {
         // Returns all entities that have both a Transform and
         // a Velocity component.
-        for (auto entity : world->view<Transform, Velocity>()) {
-            auto &tf = world->unpack<Transform>(entity);
-            auto &vel = world->unpack<Velocity>(entity);
-            tf.position.x += vel.value.x * dt;
-            tf.position.y += vel.value.y * dt;
-            tf.position.z += vel.value.z * dt;
-
-            vel.value.x -= 0.01f * dt;
-            vel.value.y -= 0.02f * dt;
-            vel.value.z -= 0.04f * dt;
-            if (vel.value.x <= 0)
-                world->emit(QuitEvent{});
-        }
-    }
-
-    void System::draw(two::World *world) override {
-        // Alternative to `view` and `unpack`
-        world->each<Transform>([](Transform &tf) {
-            printf("(%f, %f, %f)\n",
-                   tf.position.x, tf.position.y, tf.position.z);
+        world->each<Transform, Velocity>([dt](Transform &tf, Velocity &vel) {
+        	tf.x += vel.x * dt;
+            tf.y += vel.y * dt;
         });
     }
-    // May also override System::load(World *)
+    // May also override System::load(World *), System::draw(World *),
     // and System::unload(World *)
 };
+```
 
+Alternative to `world->each`:
+
+```cpp
+void draw(two::World *world) override {
+    // Alternative to the callback based world->each
+    for (auto entity : world->view<Transform>()) {
+         auto &tf = world->unpack<Transform>(entity);
+         printf("(%f, %f)\n", tf.x, tf.y);
+    }
+}
+```
+
+### Worlds
+
+Worlds manage systems, entities, components and events. Worlds can be used to load/unload game assets and setup entities and systems.
+
+```cpp
 class MainWorld : public two::World {
 public:
     void load() override {
         // This will call System::load(world)
         make_system<MoveSystem>();
-
+        
         auto entity = make_entity();
-        pack(entity, Transform{Vector3{0.0f, 0.0f, 0.0f}});
-        pack(entity, Velocity{Vector3{0.1f, 0.2f, 0.4f}});
+        pack(entity, Transform{0.0f, 0.0f}, Velocity{0.1f, 0.2f});
     }
 
     void update(float dt) override {
@@ -80,16 +77,9 @@ public:
 };
 
 int main() {
-    bool running = true;
     MainWorld world;
-
-    world.bind<QuitEvent>([&running](const QuitEvent &) {
-        running = false;
-        return true;
-    });
     world.load();
-
-    while (running) {
+    for (int frame = 0; frame < 100000; ++i) {
         // Handle events
         // ...
         // Update world
@@ -106,9 +96,29 @@ int main() {
 }
 ```
 
+### Events
+
+Events can be used to communicate between systems. Each world has independent event channels. Just like components, any data type can be used as an event.
+
+```cpp
+struct KeyDown {
+    int key;	
+};
+
+int main() {
+    two::World world;
+    world.bind<KeyDown>([](const KeyDown &event) {
+        printf("Key <%d> was pressed\n", event.key);
+        return true;
+    });
+    world.emit(KeyDown{0x20});
+    return 0;
+}
+```
+
 ## Performance
 
 [benchmarks](./docs/benchmarks.md)
 
-Entity component systems generally have very good performance, but given that the entity system is unlikely to be the bottleneck in an engine, this library prioritizes flexibility in the API over being as fast as possible.
+Given that the entity system is unlikely to be the bottleneck in an engine, this library prioritizes flexibility in the API over being as fast as possible.
 
