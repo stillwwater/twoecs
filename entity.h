@@ -1270,10 +1270,9 @@ size_t ComponentArray<T>::find_index(Entity entity) const {
     auto page = i / PageSize;
     auto index = i & (PageSize - 1);
 
-    if (page >= sparse_array.size()) {
+    if (page >= sparse_array.size() || sparse_array[page] == nullptr) {
         return InvalidIndex;
     }
-    ASSERT(sparse_array[page] != nullptr);
     return sparse_array[page][index];
 }
 
