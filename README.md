@@ -30,7 +30,7 @@ public:
         // Returns all entities that have both a Transform and
         // a Velocity component.
         world->each<Transform, Velocity>([dt](Transform &tf, Velocity &vel) {
-        	tf.x += vel.x * dt;
+            tf.x += vel.x * dt;
             tf.y += vel.y * dt;
         });
     }
