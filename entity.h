@@ -234,7 +234,7 @@ public:
 class IComponentArray {
 public:
     virtual ~IComponentArray() = default;
-    virtual void remove(Entity entity) = 0;
+    virtual bool remove(Entity entity) = 0;
     virtual void copy(Entity dst, Entity src) = 0;
 };
 
@@ -265,13 +265,15 @@ public:
     // component.
     T &write(Entity entity, const T &component);
 
-    // Invalidate this component type for an entity.
+    // Invalidate this component type for an entity. Returns true if the
+    // component was removed.
+    //
     // This function will always succeed, even if the entity does not
     // contain a component of this type.
     //
     // > References returned by `read` may become invalid after remove is
     // called.
-    void remove(Entity entity) override;
+    bool remove(Entity entity) override;
 
     // Copy component to `dst` from `src`.
     void copy(Entity dst, Entity src) override;
@@ -445,14 +447,16 @@ public:
     // Removes a component from an entity. Removing components invalidates
     // the cache.
     //
-    // This function will only check if the component does not exist for an
-    // entity if assertions are enabled, otherwise it is unchecked. Use
-    // `contains` if you need to verify the existence of a component before
-    // removing it.
+    // If the entity does not have the component being removed this function
+    // is a noop and will succeed.
     template <typename Component>
     void remove(Entity entity);
 
-    // Adds or removes an Active component
+    // Adds or removes an Active component.
+    //
+    // > When calling `set_active(entity, true)` with an entity that is already
+    // active this function won't do anything. The same is true when calling
+    // `set_active(entity, false)` with an entity that is already inactive.
     inline void set_active(Entity entity, bool active);
 
     // Returns all entities that have all requested components. By default
@@ -777,7 +781,12 @@ void World::remove(Entity entity) {
 
     auto type = component_types[type_id<Component>()];
     auto *a = static_cast<ComponentArray<Component> *>(components[type].get());
-    a->remove(entity);
+
+    if (!a->remove(entity)) {
+        // No need to invalidate caches since the entity didn't have
+        // a component of this type.
+        return;
+    }
 
     // Invalidate caches
     for (auto &cached : view_cache) {
@@ -1228,14 +1237,14 @@ T &ComponentArray<T>::write(Entity entity, const T &component) {
 }
 
 template <typename T>
-void ComponentArray<T>::remove(Entity entity) {
+bool ComponentArray<T>::remove(Entity entity) {
     auto removed = find_index(entity);
     if (removed == InvalidIndex) {
         // This is a no-op since calling this as a virtual member function
         // means there is no way for the caller to check if the entity
         // contains a component. `contains` is not virtual as it needs to
         // be fast.
-        return;
+        return false;
     }
     // Move the last component into the empty slot to keep the array packed
     auto last = packed_count - 1;
@@ -1251,6 +1260,7 @@ void ComponentArray<T>::remove(Entity entity) {
     insert_index(entity, InvalidIndex);
     packed_to_entity.erase(last);
     --packed_count;
+    return true;
 }
 
 template <typename T>

@@ -222,7 +222,7 @@ public:
 
     T &write(two::Entity entity, const T &component);
 
-    virtual void remove(two::Entity entity) override;
+    virtual bool remove(two::Entity entity) override;
 
     virtual void copy(two::Entity dst, two::Entity src) override;
 
@@ -279,10 +279,10 @@ Set a component in the packed array and associate an entity with the component.
 ### Function `two::ComponentArray::remove`
 
 ``` cpp
-virtual void remove(two::Entity entity) override;
+virtual bool remove(two::Entity entity) override;
 ```
 
-Invalidate this component type for an entity.
+Invalidate this component type for an entity. Returns true if the component was removed.
 
 This function will always succeed, even if the entity does not contain a component of this type.
 
@@ -606,7 +606,7 @@ void remove(two::Entity entity);
 
 Removes a component from an entity. Removing components invalidates the cache.
 
-This function will only check if the component does not exist for an entity if assertions are enabled, otherwise it is unchecked. Use has\_component if you need to verify the existence of a component before removing it.
+This function will succeed regardless of whether the entity contains the component being removed.
 
 -----
 
@@ -627,7 +627,9 @@ Components will be registered on their own if a new type of component is added t
 void set_active(two::Entity entity, bool active);
 ```
 
-Adds or removes an Active component
+Adds or removes an Active component.
+
+> When calling `set_active(entity, true)` with an entity that is already active this function won’t do anything. The same if true when calling `set_active(entity, false)` with an entity that is already inactive.
 
 ---
 
