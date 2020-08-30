@@ -1,5 +1,10 @@
 # Change Log
 
+2020-08-30
+----------
+
+* Fixed overload of `World::contains` being invalid when using two template arguments.
+
 2020-08-18
 ----------
 

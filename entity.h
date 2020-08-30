@@ -441,7 +441,8 @@ public:
     inline bool contains(Entity entity) const;
 
     // Returns true if an entity contains all given components.
-    template <typename C0, typename C1, typename... Cn>
+    template <typename C0, typename... Cn,
+        typename Enable = typename std::enable_if<(sizeof...(Cn) > 0)>::type>
     inline bool contains(Entity entity) const;
 
     // Removes a component from an entity. Removing components invalidates
@@ -766,10 +767,9 @@ inline bool World::contains(Entity entity) const {
     return a->contains(entity);
 }
 
-template <typename C0, typename C1, typename... Cn>
+template <typename C0, typename... Cn, typename Enable>
 inline bool World::contains(Entity entity) const {
     return contains<C0>(entity)
-        && contains<C1>(entity)
         && contains<Cn...>(entity);
 }
 

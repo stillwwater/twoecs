@@ -109,6 +109,19 @@ BENCHMARK_TEMPLATE(BM_View, A, B, C, D)
     ->Range(256, 1024<<10)
     ->Unit(benchmark::kMillisecond);
 
+static void BM_Contains(benchmark::State &state) {
+    std::unique_ptr<two::World> world(new two::World);
+    make_entities<A>(world, state.range(0));
+    for (auto _ : state) {
+        for (auto entity : world->unsafe_view_all()) {
+            benchmark::DoNotOptimize(world->contains<A>(entity));
+        }
+    }
+}
+BENCHMARK(BM_Contains)
+    ->Range(256, 1024<<10)
+    ->Unit(benchmark::kMillisecond);
+
 static void BM_CreateEntityAndPack(benchmark::State &state) {
     std::unique_ptr<two::World> world(new two::World);
     for (auto _ : state) {
