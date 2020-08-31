@@ -762,15 +762,12 @@ inline bool World::contains(Entity entity) const {
     if (type_it == component_types.end()) {
         return false;
     }
-    auto type = type_it->second;
-    auto *a = static_cast<ComponentArray<Component> *>(components[type].get());
-    return a->contains(entity);
+    return entity_masks[entity].test(type_it->second);
 }
 
 template <typename C0, typename... Cn, typename Enable>
 inline bool World::contains(Entity entity) const {
-    return contains<C0>(entity)
-        && contains<Cn...>(entity);
+    return contains<C0>(entity) && contains<Cn...>(entity);
 }
 
 template <typename Component>
