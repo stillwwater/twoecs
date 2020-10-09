@@ -13,7 +13,7 @@ For the complete API documentation see the [docs](./docs/README.md). For a more 
 Any struct that is copy constructible and copy assignable can be used as a component. Components do not need to be registered before they are used.
 
 ```cpp
-struct Position {
+struct Transform {
     float x, y;
 };
 
@@ -61,7 +61,7 @@ public:
     void load() override {
         // This will call System::load(world)
         make_system<MoveSystem>();
-        
+
         auto entity = make_entity();
         pack(entity, Transform{0.0f, 0.0f}, Velocity{0.1f, 0.2f});
     }
@@ -102,7 +102,7 @@ Events can be used to communicate between systems. Each world has independent ev
 
 ```cpp
 struct KeyDown {
-    int key;	
+    int key;
 };
 
 int main() {
